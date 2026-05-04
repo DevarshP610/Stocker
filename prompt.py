@@ -1,12 +1,15 @@
-import google.generativeai as genai
+from google import genai
 import os
 
 def generate_response(prompt):
     # initialize the model
-    model = genai.GenerativeModel("gemini-2.0-pro")
+    client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
 
-    # generate a response
-    response = model.generate_content(prompt)
+    # The new way to generate content
+    response = client.models.generate_content(
+        model="gemini-2.0-pro", 
+        contents=prompt
+    )
 
     return response.text
 
