@@ -1,4 +1,4 @@
-from google import genai
+import ollama
 import os
 from dotenv import load_dotenv
 from datetime import datetime
@@ -10,17 +10,19 @@ load_dotenv()
 now = datetime.now()
 current_time = now.strftime("%B %d, %Y, %H:%M:%S")
 
+import ollama
+
+import ollama
+
 def generate_response(prompt):
-    # initialize the model
-    client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
-
-    # The new way to generate content
-    response = client.models.generate_content(
-        model="gemini-2.5-flash", 
-        contents=prompt
+    print("Generating response......")
+    
+    response = ollama.chat(
+    model='llama3.2:3b', 
+    messages=[{'role': 'user', 'content': prompt}],
     )
-
-    return response.text
+    
+    return response['message']['content']
 
     
 
