@@ -1,5 +1,14 @@
 from google import genai
 import os
+from dotenv import load_dotenv
+from datetime import datetime
+
+load_dotenv()
+
+
+#grab current date and time for precise prompt
+now = datetime.now()
+current_time = now.strftime("%B %d, %Y, %H:%M:%S")
 
 def generate_response(prompt):
     # initialize the model
@@ -7,13 +16,15 @@ def generate_response(prompt):
 
     # The new way to generate content
     response = client.models.generate_content(
-        model="gemini-2.0-pro", 
+        model="gemini-2.5-flash", 
         contents=prompt
     )
 
     return response.text
 
-prompt = """You are an elite quantitative analyst and real-time algorithmic trading AI. The current operational date is May 4, 2026. Your objective is to execute high-frequency, data-driven market analysis and identify the top 5 high-probability trades for this exact moment.
+    
+
+prompt = f"""You are an elite quantitative analyst and real-time algorithmic trading AI. The current operational date and time is {now}. Your objective is to execute high-frequency, data-driven market analysis and identify the top 5 high-probability trades for this exact moment.
 
 Instructions:
 
