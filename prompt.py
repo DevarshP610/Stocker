@@ -1,54 +1,83 @@
 import ollama
-import os
-from dotenv import load_dotenv
+import yfinance as yf
 from datetime import datetime
 
-load_dotenv()
-
-
-#grab current date and time for precise prompt
 now = datetime.now()
 current_time = now.strftime("%B %d, %Y, %H:%M:%S")
 
-import ollama
-
-import ollama
-
 def generate_response(prompt):
-    print("Generating response......")
-    
+    print(f"\n[{datetime.now().strftime('%H:%M:%S')}] Llama 3.2 is analyzing...")
     response = ollama.chat(
-    model='llama3.2:3b', 
-    messages=[{'role': 'user', 'content': prompt}],
+        model='llama3.2:3b', 
+        messages=[{'role': 'user', 'content': prompt}],
     )
-    
     return response['message']['content']
 
-    
+def get_live_data(ticker):
+    try:
+        # Create a session to help bypass basic blocks
+        stock = yf.Ticker(ticker)
+        
+        
+        df = stock.history(period="3d", interval="1h")
+        
+        if df.empty:
 
-prompt = f"""You are an elite quantitative analyst and real-time algorithmic trading AI. The current operational date and time is {now}. Your objective is to execute high-frequency, data-driven market analysis and identify the top 5 high-probability trades for this exact moment.
+            df = stock.history(period="1mo", interval="1d")
 
-Instructions:
+        if not df.empty:
+            current_price = df['Close'].iloc[-1]
+            try:
+                news_items = stock.news[:2]
+                headlines = [n['title'] for n in news_items] if news_items else ["Stable market action."]
+            except:
+                headlines = ["News data temporarily restricted by provider."]
+            
+            return current_price, headlines
+            
+        return None, ["Yahoo returned an empty dataset."]
+        
+    except Exception as e:
+        return None, [f"Connection error: {str(e)}"]
 
-Synthesize breaking financial news, macroeconomic indicators, and market sentiment from the last 12 hours.
+watchlist = ["NVDA", "TSLA", "BTC-USD", "ETH-USD", "EURUSD=X"]
 
-Cross-reference this news with real-time volume and price action.
+print(f"--- Market Analysis for {current_time} ---")
+print("Fetching real-time data for high-volume assets...")
 
-Output the top 5 stocks to trade immediately.
+market_context = ""
+for symbol in watchlist:
+    price, news = get_live_data(symbol)
+    if price:
+        news_block = " | ".join(news)
+        market_context += f"Asset: {symbol} | Price: ${price:.2f} | News: {news_block}\n"
+    else:
+        print(f"Skipping {symbol}: Could not retrieve data.")
 
-Output Format:
-For each stock, provide ONLY the actionable data:
+prompt = f"""You are an elite quantitative analyst AI. 
+Current Time: {current_time}
 
-Ticker Symbol
+LIVE MARKET DATA:
+{market_context}
 
-Trade Direction: (Long/Short)
+YOUR TASK:
+Using ONLY the data provided above, identify the top 3 trades. 
+Cross-reference the current price with the news sentiment.
 
-Immediate Catalyst: (One sentence on the news/data driving the movement)
+OUTPUT FORMAT:
+- Ticker: [Symbol]
+- Direction: [Long/Short]
+- Catalyst: [1 sentence based on the news provided]
+- Target: [Exact price]
+- Stop: [Exact price]
+"""
 
-Precise Entry Target: (Specific price level)
-
-Strict Exit Strategy: (Take-profit and stop-loss levels)
-
-Do not provide lengthy qualitative explanations or general financial advice. Focus strictly on the minute-by-minute execution plan based on current data."""
-response = generate_response(prompt)
-print(response)
+#execution
+if market_context.strip():
+    result = generate_response(prompt)
+    print("\n" + "="*30)
+    print("AI TRADING SIGNALS")
+    print("="*30)
+    print(result)
+else:
+    print("Error: No market data could be retrieved. Check your internet connection.")

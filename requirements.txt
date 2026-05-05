@@ -1,2 +1,5 @@
 ollama
 python-dotenv
+yfinance
+pandas
+requests
