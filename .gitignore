@@ -1,4 +1,5 @@
 .venv/
 .env
-current_screen.png
+current_screen.jpg
 config.json
+temp_fullscreen.jpg

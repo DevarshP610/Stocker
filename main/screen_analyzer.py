@@ -3,65 +3,46 @@ import ollama
 import pyautogui
 import time
 import os
+from PIL import Image
 
-def analyze_screen():
-    print("Preparing screenshot... Switch to your chart now!")
-    time.sleep(3)
-
-    image_path = "current_screen.png"
+def run_vision_agent() -> dict:
+    image_path = "current_screen.jpg"
     
     try:
-        # 1. Load the dynamic coordinates from the setup tool
         if not os.path.exists("config.json"):
-            print("\nERROR: config.json not found!")
-            print("Please run 'python setup_bounds.py' first to select your chart area.")
-            return
+            return {"status": "error", "message": "config.json not found. Run set_bounds.py first."}
             
         with open("config.json", "r") as f:
             config = json.load(f)
-            # Convert the list back into a tuple format (X, Y, Width, Height)
             chart_region = tuple(config["region"])
             
-        # 2. Take a screenshot of ONLY that specific region
-        pyautogui.screenshot(image_path, region=chart_region)
-        print(f"Screenshot saved using dynamic bounds {chart_region}.")
-        print("Sending to LLaVA (The Heavyweight Vision Model)...")
+        # Take screenshot
+        raw_img = pyautogui.screenshot(region=chart_region)
+        
+        # THE FIX: Strip Alpha channel and force exact native 336x336 resolution
+        raw_img = raw_img.convert('RGB')
+        raw_img.thumbnail((336, 336), Image.Resampling.LANCZOS) 
+        raw_img.save(image_path, "JPEG", quality=75)
 
     except Exception as e:
-        print(f"PyAutoGUI Error: {e}")
-        return
+        return {"status": "error", "message": f"Screenshot failed: {e}"}
 
     try:
-        # 3. THE UPGRADED PROMPT: Asking for real technical analysis
-        prompt = """You are an expert quantitative analyst. Look at the provided trading terminal screenshot. 
-Please provide a highly structured analysis with the following exactly:
-
-PRICE: [Extract the exact current trading price]
-TREND: [Analyze the recent candles: Bullish, Bearish, or Ranging]
-KEY PATTERN: [Name any visible candlestick patterns or support/resistance levels]
-SIGNAL: [LONG or SHORT]
-RATIONALE: [One sentence explaining the technical reason for this signal]"""
+        vision_prompt = """Focus ONLY on the far right side of this chart (most recent 10-15 candles). Do NOT guess the price.
+Answer with exactly these three lines:
+TREND: [Bullish, Bearish, or Ranging]
+PATTERN: [Name any visible candlestick patterns or momentum shifts]
+MOMENTUM: [Up or Down]"""
         
         response = ollama.chat(
             model='llava', 
-            messages=[{
-                'role': 'user', 
-                'content': prompt,
-                'images': [image_path] 
-            }],
-            options={'temperature': 0.1} # Keeps the AI analytical and grounded
+            messages=[{'role': 'user', 'content': vision_prompt, 'images': [image_path]}],
+            options={
+                'temperature': 0.1,
+                'num_ctx': 4096  # THE FIX: Expand the memory buffer so it doesn't crash
+            } 
         )
-        
-        # 4. Print the final output
-        print("\n" + "="*40)
-        print("LLaVA TECHNICAL ANALYSIS")
-        print("="*40)
-        print(response['message']['content'].strip())
-        print("="*40)
+        return {"status": "success", "data": response['message']['content'].strip()}
         
     except Exception as e:
-        print(f"\nOllama Error: {e}")
-        print("Tip: Make sure Ollama is running in the background and 'llava' is downloaded.")
-
-if __name__ == "__main__":
-    analyze_screen()
+        return {"status": "error", "message": f"LLaVA Error: {e}"}
