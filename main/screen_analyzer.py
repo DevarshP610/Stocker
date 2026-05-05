@@ -1,3 +1,4 @@
+import json
 import ollama
 import pyautogui
 import time
@@ -10,20 +11,28 @@ def analyze_screen():
     image_path = "current_screen.png"
     
     try:
-        # We can go back to taking a full screenshot, LLaVA is smart enough to handle it!
-        pyautogui.screenshot(image_path)
-        print(f"Screenshot saved. Sending to LLaVA (The Heavyweight Vision Model)...")
-        
-        if not os.path.exists(image_path):
-            print("Error: Screenshot file was not created.")
+        # 1. Load the dynamic coordinates from the setup tool
+        if not os.path.exists("config.json"):
+            print("\nERROR: config.json not found!")
+            print("Please run 'python setup_bounds.py' first to select your chart area.")
             return
+            
+        with open("config.json", "r") as f:
+            config = json.load(f)
+            # Convert the list back into a tuple format (X, Y, Width, Height)
+            chart_region = tuple(config["region"])
+            
+        # 2. Take a screenshot of ONLY that specific region
+        pyautogui.screenshot(image_path, region=chart_region)
+        print(f"Screenshot saved using dynamic bounds {chart_region}.")
+        print("Sending to LLaVA (The Heavyweight Vision Model)...")
 
     except Exception as e:
         print(f"PyAutoGUI Error: {e}")
         return
 
     try:
-        # THE UPGRADED PROMPT: We can now ask for real technical analysis
+        # 3. THE UPGRADED PROMPT: Asking for real technical analysis
         prompt = """You are an expert quantitative analyst. Look at the provided trading terminal screenshot. 
 Please provide a highly structured analysis with the following exactly:
 
@@ -34,15 +43,16 @@ SIGNAL: [LONG or SHORT]
 RATIONALE: [One sentence explaining the technical reason for this signal]"""
         
         response = ollama.chat(
-            model='llava', # <--- UPGRADED MODEL
+            model='llava', 
             messages=[{
                 'role': 'user', 
                 'content': prompt,
                 'images': [image_path] 
             }],
-            options={'temperature': 0.1} 
+            options={'temperature': 0.1} # Keeps the AI analytical and grounded
         )
         
+        # 4. Print the final output
         print("\n" + "="*40)
         print("LLaVA TECHNICAL ANALYSIS")
         print("="*40)
@@ -50,7 +60,8 @@ RATIONALE: [One sentence explaining the technical reason for this signal]"""
         print("="*40)
         
     except Exception as e:
-        print(f"Ollama Error: {e}")
+        print(f"\nOllama Error: {e}")
+        print("Tip: Make sure Ollama is running in the background and 'llava' is downloaded.")
 
 if __name__ == "__main__":
     analyze_screen()
