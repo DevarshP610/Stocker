@@ -1,3 +1,5 @@
+STOCKER
+
 AI-Stock-Investor is an open-source, 100% local algorithmic trading assistant. It combines live market data scraping with advanced local AI models (Llama 3.1 / 3.2 for quantitative reasoning) and local Vision models (LLaVA for real-time chart pattern recognition) to generate actionable Long/Short signals.
 
 Best of all? It runs entirely on your local hardware. No OpenAI API keys, no subscription fees, and complete data privacy.
@@ -16,7 +18,7 @@ Best of all? It runs entirely on your local hardware. No OpenAI API keys, no sub
 🚀 Installation Guide
 Step 1: Clone the Repository
 Bash
-git clone https://github.com/YOUR_USERNAME/AI-Stock-Investor.git
+git clone https://github.com/DevarshP610/Stocker.git
 cd AI-Stock-Investor
 Step 2: Install Python Dependencies
 Make sure you have Python installed, then run:
