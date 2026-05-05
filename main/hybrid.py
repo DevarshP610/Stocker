@@ -2,8 +2,9 @@ import os
 import time
 import ollama
 from typing import Dict, Any
+import requests 
 
-# Import your custom modules
+
 import screen_analyzer
 import prompt
 
@@ -15,6 +16,8 @@ class Colors:
     FAIL = '\033[91m'
     ENDC = '\033[0m'
     BOLD = '\033[1m'
+
+
 
 def generate_trade_signal(ticker: str, market_data: Dict[str, Any], vision_report: str) -> str:
     brain_prompt = f"""You are a strict quantitative algorithmic trading bot. Evaluate this combined data stream:
@@ -35,23 +38,33 @@ TARGET: [Calculate realistic target]
 STOP: [Calculate tight stop-loss]
 REASON: [One sentence mathematical & visual justification]"""
 
+    payload = {
+        "model": "llama3.2:3b",
+        "messages": [
+            {
+                "role": "user",
+                "content": brain_prompt
+            }
+        ],
+        "stream": False,
+        "options": {"temperature": 0.1},
+        "keep_alive": 0 
+    }
+
     try:
-        response = ollama.chat(
-            model='llama3.1', 
-            messages=[{'role': 'user', 'content': brain_prompt}],
-            options={'temperature': 0.1, 'num_ctx': 4096} 
-        )
-        return response['message']['content'].strip()
+        response = requests.post("http://localhost:11434/api/chat", json=payload)
+        response.raise_for_status()
+        data = response.json()
+        return data['message']['content'].strip()
     except Exception as e:
         return f"Brain AI Error: {e}"
-
 def main():
     os.system('cls' if os.name == 'nt' else 'clear')
     print(f"{Colors.HEADER}{Colors.BOLD}============================================{Colors.ENDC}")
     print(f"{Colors.HEADER}{Colors.BOLD}   HYBRID QUANTITATIVE TRADING TERMINAL     {Colors.ENDC}")
     print(f"{Colors.HEADER}{Colors.BOLD}============================================{Colors.ENDC}")
     
-    # Keep it simple and stable: Just ask for the ticker
+
     ticker = input(f"\n{Colors.BLUE}Enter Asset Ticker (e.g., BTC-USD): {Colors.ENDC}").upper()
     
     print(f"\n{Colors.WARNING}Prepare your chart. Scanning screen in 3 seconds...{Colors.ENDC}")

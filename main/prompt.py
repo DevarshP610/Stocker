@@ -26,7 +26,7 @@ def fetch_market_data(ticker):
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
-# This allows the file to be run by itself for testing!
+
 if __name__ == "__main__":
     test_ticker = "BTC-USD"
     print(f"Running standalone data test for {test_ticker}...")
