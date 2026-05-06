@@ -1,64 +1,52 @@
 import sys
 import os
-import time
 import threading
-import subprocess
-import numpy as np
-import pyqtgraph as pg
-from typing import Dict, Any, cast
+from typing import Dict, Any
 
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                              QHBoxLayout, QLabel, QPushButton, QLineEdit, 
                              QTextEdit, QFrame, QProgressBar, QSplitter)
 from PyQt6.QtCore import Qt, pyqtSignal, QObject, QPointF, QRectF
-from PyQt6.QtGui import QFont, QColor, QPicture, QPainter
+from PyQt6.QtGui import QFont, QPicture, QPainter
+import pyqtgraph as pg
 
-# --- THE MODULAR BRIDGE ---
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MAIN_PATH = os.path.join(BASE_DIR, 'main')
 if MAIN_PATH not in sys.path:
     sys.path.append(MAIN_PATH)
 
 try:
-    import screen_analyzer # type: ignore
-    import prompt          # type: ignore
-    import hybrid          # type: ignore
+    import data_engine # type: ignore
+    import hybrid      # type: ignore
 except ImportError as e:
     print(f"FATAL IMPORT ERROR: {e}")
     sys.exit(1)
 
-# --- CUSTOM CANDLESTICK CLASS FOR PYQTGRAPH ---
 class CandlestickItem(pg.GraphicsObject):
     def __init__(self, chart_data):
         pg.GraphicsObject.__init__(self)
-        self.chart_data = chart_data  # [ (time, open, close, min, max), ... ]
+        self.chart_data = chart_data 
         self.generatePicture()
 
     def generatePicture(self):
         self.picture = QPicture()
         p = QPainter(self.picture)
-        p.setPen(pg.mkPen('#71717A', width=1)) # Wick color
+        p.setPen(pg.mkPen('#71717A', width=1)) 
         
-        # Calculate candle width safely
         if len(self.chart_data) > 1:
             w = (self.chart_data[1][0] - self.chart_data[0][0]) / 3.0
         else:
             w = 0.3
-        
-        for (t, open_p, close_p, min_p, max_p) in self.chart_data:
-            # Draw wick
-            p.drawLine(QPointF(t, min_p), QPointF(t, max_p))
             
-            # Draw body
+        for (t, open_p, close_p, min_p, max_p) in self.chart_data:
+            p.drawLine(QPointF(t, min_p), QPointF(t, max_p))
             if open_p > close_p:
-                p.setBrush(pg.mkBrush('#F43F5E')) # Bearish (Soft Red)
+                p.setBrush(pg.mkBrush('#F43F5E')) 
                 p.setPen(pg.mkPen('#F43F5E'))
             else:
-                p.setBrush(pg.mkBrush('#2DD4BF')) # Bullish (Teal)
+                p.setBrush(pg.mkBrush('#2DD4BF')) 
                 p.setPen(pg.mkPen('#2DD4BF'))
-            
             p.drawRect(QRectF(t - w, open_p, w * 2, close_p - open_p))
-            
         p.end()
 
     def paint(self, p, *args):
@@ -67,215 +55,178 @@ class CandlestickItem(pg.GraphicsObject):
     def boundingRect(self):
         return QRectF(self.picture.boundingRect())
 
-# --- BACKGROUND THREAD SIGNALS ---
 class WorkerSignals(QObject):
     log = pyqtSignal(str)
     progress = pyqtSignal(int)
-    finished = pyqtSignal(str, str) # ticker, signal_text
+    api_data_ready = pyqtSignal(list, str) 
+    finished = pyqtSignal(str, str) 
     error = pyqtSignal(str)
 
-# --- AI INSIGHT UI PANEL ---
-class AIAnalysisCard(QFrame):
-    def __init__(self):
-        super().__init__()
-        self.setObjectName("Card")
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(24, 24, 24, 24)
-        layout.setSpacing(16)
-
-        header = QLabel("AI SYNTHESIS")
-        header.setFont(QFont("Inter", 14, QFont.Weight.Bold))
-        header.setStyleSheet("color: #A1A1AA; letter-spacing: 2px;")
-        layout.addWidget(header)
-
-        self.signal_label = QLabel("AWAITING DATA")
-        self.signal_label.setFont(QFont("Inter", 22, QFont.Weight.Bold))
-        self.signal_label.setStyleSheet("color: #71717A;")
-        layout.addWidget(self.signal_label)
-
-        layout.addWidget(QLabel("Analysis Output:"))
-        self.insight_box = QTextEdit()
-        self.insight_box.setReadOnly(True)
-        self.insight_box.setPlaceholderText("System idle. Initialize analysis to generate insights.")
-        layout.addWidget(self.insight_box)
-
-        self.progress_bar = QProgressBar()
-        self.progress_bar.setValue(0)
-        self.progress_bar.setFixedHeight(8)
-        layout.addWidget(self.progress_bar)
-        
-        self.status_label = QLabel("Ready.")
-        self.status_label.setStyleSheet("color: #A1A1AA; font-size: 11px;")
-        layout.addWidget(self.status_label)
-
-    def update_insight(self, text):
-        self.insight_box.append(text + "\n")
-        text_upper = text.upper()
-        if "LONG" in text_upper or "BULLISH" in text_upper:
-            self.signal_label.setText("LONG BIAS")
-            self.signal_label.setStyleSheet("color: #2DD4BF;") 
-        elif "SHORT" in text_upper or "BEARISH" in text_upper:
-            self.signal_label.setText("SHORT BIAS")
-            self.signal_label.setStyleSheet("color: #F43F5E;") 
-        elif "NEUTRAL" in text_upper:
-            self.signal_label.setText("NEUTRAL")
-            self.signal_label.setStyleSheet("color: #A1A1AA;")
-
-# --- MAIN APPLICATION WINDOW ---
 class ResearchApp(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("AI Vision & Quant Interface")
-        self.resize(1200, 750)
+        self.setWindowTitle("QuantOS Intelligence Node")
+        self.resize(1300, 800)
 
-        # Load Stylesheet
         try:
             with open("theme.qss", "r") as f:
                 self.setStyleSheet(f.read())
-        except FileNotFoundError:
-            print("theme.qss not found. Using default styles.")
+        except:
+            pass
+            
+        self.active_period = "6mo"
+        self.active_interval = "1d"
 
         central = QWidget()
         self.setCentralWidget(central)
         main_layout = QVBoxLayout(central)
-        main_layout.setContentsMargins(20, 20, 20, 20)
-        main_layout.setSpacing(20)
 
-        # --- TOP CONTROL BAR ---
+        # TOP CONTROL BAR
         control_bar = QFrame()
         control_bar.setObjectName("Card")
         control_layout = QHBoxLayout(control_bar)
-        control_layout.setContentsMargins(20, 15, 20, 15)
-
+        
         self.ticker_input = QLineEdit()
-        self.ticker_input.setPlaceholderText("Target Asset (e.g., AAPL)")
-        self.ticker_input.setFixedWidth(200)
+        self.ticker_input.setPlaceholderText("Enter Asset (e.g., AAPL, BTC-USD)")
+        self.ticker_input.setFixedWidth(300)
         control_layout.addWidget(self.ticker_input)
-
-        self.bounds_btn = QPushButton("1. Calibrate Vision (Set Bounds)")
-        self.bounds_btn.setObjectName("ToolBtn")
-        self.bounds_btn.clicked.connect(self.run_bounds_tool)
-        control_layout.addWidget(self.bounds_btn)
 
         control_layout.addStretch()
 
-        self.analyze_btn = QPushButton("2. Initialize AI Analysis")
+        self.analyze_btn = QPushButton("INITIATE NEURAL SCAN")
         self.analyze_btn.setObjectName("PrimaryBtn")
         self.analyze_btn.clicked.connect(self.start_analysis)
         control_layout.addWidget(self.analyze_btn)
 
         main_layout.addWidget(control_bar)
 
-        # --- LOWER SPLIT AREA ---
-        splitter = QSplitter(Qt.Orientation.Horizontal)
+        # SPLIT LAYOUT
+        main_splitter = QSplitter(Qt.Orientation.Horizontal)
 
-        # Left: Chart Display
+        left_panel = QWidget()
+        left_layout = QVBoxLayout(left_panel)
+        left_layout.setContentsMargins(0, 0, 0, 0)
+
+        # CHART FRAME
         chart_frame = QFrame()
         chart_frame.setObjectName("Card")
         chart_layout = QVBoxLayout(chart_frame)
-        chart_layout.setContentsMargins(15, 15, 15, 15)
         
-        chart_title = QLabel("DATA VISUALIZATION")
+        # --- TIMEFRAME TOOLBAR ---
+        tf_layout = QHBoxLayout()
+        chart_title = QLabel("LIVE API DATA VISUALIZATION")
         chart_title.setFont(QFont("Inter", 11, QFont.Weight.Bold))
         chart_title.setStyleSheet("color: #71717A;")
-        chart_layout.addWidget(chart_title)
+        tf_layout.addWidget(chart_title)
+        tf_layout.addStretch()
+        
+        timeframes = [("1D", "1d", "1m"), ("1W", "5d", "5m"), ("1M", "1mo", "1h"), 
+                      ("6M", "6mo", "1d"), ("1Y", "1y", "1d"), ("2Y", "2y", "1d")]
+        
+        for name, p, i in timeframes:
+            btn = QPushButton(name)
+            btn.setStyleSheet("background-color: #27272A; color: #A1A1AA; border-radius: 4px; padding: 4px 8px;")
+            # Use default arguments in lambda to capture the current values of p and i
+            btn.clicked.connect(lambda checked=False, per=p, inv=i: self.update_timeframe(per, inv))
+            tf_layout.addWidget(btn)
+            
+        chart_layout.addLayout(tf_layout)
 
-        # Initialize PyQtGraph
         pg.setConfigOptions(antialias=True)
         self.plot = pg.PlotWidget()
         self.plot.setBackground('transparent')
         self.plot.showGrid(x=True, y=True, alpha=0.1)
-        self.plot.getAxis('left').setPen('#3F3F46')
-        self.plot.getAxis('bottom').setPen('#3F3F46')
-        
         chart_layout.addWidget(self.plot)
-        splitter.addWidget(chart_frame)
+        left_layout.addWidget(chart_frame, stretch=2)
 
-        # Right: AI Insights
-        self.ai_card = AIAnalysisCard()
-        splitter.addWidget(self.ai_card)
+        # NEWS FRAME
+        news_frame = QFrame()
+        news_frame.setObjectName("Card")
+        news_layout = QVBoxLayout(news_frame)
+        news_title = QLabel("MACRO SYNTHESIS & NEWS STREAM")
+        news_title.setFont(QFont("Inter", 11, QFont.Weight.Bold))
+        news_title.setStyleSheet("color: #71717A;")
+        news_layout.addWidget(news_title)
+
+        self.news_box = QTextEdit()
+        self.news_box.setReadOnly(True)
+        news_layout.addWidget(self.news_box)
+        left_layout.addWidget(news_frame, stretch=1)
+
+        main_splitter.addWidget(left_panel)
+
+        # RIGHT PANEL
+        right_panel = QFrame()
+        right_panel.setObjectName("Card")
+        right_layout = QVBoxLayout(right_panel)
         
-        # Sizing Rules
-        splitter.setSizes([700, 450])
-        main_layout.addWidget(splitter, stretch=1)
+        exec_title = QLabel("EXECUTION DIRECTIVE")
+        exec_title.setFont(QFont("Inter", 14, QFont.Weight.Bold))
+        exec_title.setStyleSheet("color: #A1A1AA; letter-spacing: 2px;")
+        right_layout.addWidget(exec_title)
 
-        # Connect Signals
+        self.signal_label = QLabel("STANDBY")
+        self.signal_label.setFont(QFont("Inter", 26, QFont.Weight.Bold))
+        self.signal_label.setStyleSheet("color: #71717A;")
+        right_layout.addWidget(self.signal_label)
+
+        right_layout.addWidget(QLabel("Quant Logic Output:"))
+        self.insight_box = QTextEdit()
+        self.insight_box.setReadOnly(True)
+        right_layout.addWidget(self.insight_box)
+
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setFixedHeight(8)
+        right_layout.addWidget(self.progress_bar)
+        
+        self.status_label = QLabel("Ready.")
+        self.status_label.setStyleSheet("color: #A1A1AA;")
+        right_layout.addWidget(self.status_label)
+
+        main_splitter.addWidget(right_panel)
+        main_splitter.setSizes([800, 400])
+        main_layout.addWidget(main_splitter, stretch=1)
+
         self.signals = WorkerSignals()
         self.signals.log.connect(self.update_status)
         self.signals.progress.connect(self.update_progress)
+        self.signals.api_data_ready.connect(self.render_api_chart)
         self.signals.finished.connect(self.analysis_complete)
         self.signals.error.connect(self.analysis_error)
 
-        # Generate initial mock candles so it looks like a real chart
-        self.generate_mock_candles()
+    def update_timeframe(self, period, interval):
+        """Called when user clicks a timeframe button like 1D, 1W, 1Y"""
+        self.active_period = period
+        self.active_interval = interval
+        ticker = self.ticker_input.text().upper().strip()
+        if not ticker: return
+        self.update_status(f"Fetching {period} chart data...")
+        threading.Thread(target=self._quick_fetch, args=(ticker, period, interval), daemon=True).start()
 
-    def generate_mock_candles(self, start_price=2350):
-        """Generates realistic looking candle data to populate the graph."""
-        self.plot.clear()
-        data = []
-        current_price = start_price
-        for i in range(60):
-            open_p = current_price
-            close_p = open_p + np.random.normal(0, 10)
-            high_p = max(open_p, close_p) + abs(np.random.normal(0, 5))
-            low_p = min(open_p, close_p) - abs(np.random.normal(0, 5))
-            data.append((i, open_p, close_p, low_p, high_p))
-            current_price = close_p
-            
-        self.last_candle_x = 59
-        self.last_candle_close = current_price
-            
-        candlesticks = CandlestickItem(data)
-        self.plot.addItem(candlesticks)
-
-    def add_ai_target_dot(self, signal_text):
-        """Parses the AI text for ENTRY or TARGET prices and drops a dot on the chart."""
-        target_price = None
-        
-        # Super simple parser: Looks for a '$' and grabs the number after it
-        if "$" in signal_text:
-            try:
-                # Find the first dollar amount mentioned (usually ENTRY or TARGET)
-                parts = signal_text.split("$")
-                price_str = parts[1].split()[0].replace(',', '')
-                target_price = float(price_str)
-            except:
-                pass
-
-        # If we couldn't find a price, just place it near the last candle
-        if not target_price:
-            target_price = self.last_candle_close
-
-        # Create the visual targeting dot
-        scatter = pg.ScatterPlotItem(
-            size=15, 
-            pen=pg.mkPen(None), 
-            brush=pg.mkBrush('#8B5CF6'), # Violet Dot
-            symbol='o'
-        )
-        scatter.addPoints([{'pos': (self.last_candle_x + 2, target_price)}])
-        self.plot.addItem(scatter)
-
-        # Add the text label next to the dot
-        text = pg.TextItem("AI Target / Entry", anchor=(0, 0.5), color="#D4D4D8")
-        text.setFont(QFont("Inter", 10, QFont.Weight.Bold))
-        text.setPos(self.last_candle_x + 3, target_price)
-        self.plot.addItem(text)
-
-    def run_bounds_tool(self):
-        self.update_status("Launching bounding box tool...")
-        script_path = os.path.join(MAIN_PATH, 'set_bounds.py')
-        try:
-            subprocess.Popen([sys.executable, script_path])
-        except Exception as e:
-            self.update_status(f"Error launching bounds tool: {e}")
+    def _quick_fetch(self, ticker, period, interval):
+        """Silently updates the chart without triggering the AI"""
+        intel = data_engine.fetch_market_intelligence(ticker, period, interval)
+        if intel['status'] == 'success':
+            self.signals.api_data_ready.emit(intel['chart_data'], intel['news'])
 
     def update_status(self, msg):
-        self.ai_card.status_label.setText(msg)
-        self.ai_card.insight_box.append(f"[{time.strftime('%H:%M:%S')}] {msg}")
+        self.status_label.setText(msg)
 
     def update_progress(self, val):
-        self.ai_card.progress_bar.setValue(val)
+        self.progress_bar.setValue(val)
+
+    def render_api_chart(self, chart_data, news_text):
+        self.plot.clear()
+        candlesticks = CandlestickItem(chart_data)
+        self.plot.addItem(candlesticks)
+        
+        # --- FIX: FORCE THE CHART TO AUTO-ZOOM TO THE CANDLES ---
+        self.plot.autoRange()
+        
+        if news_text:
+            self.news_box.clear()
+            self.news_box.append("=== LIVE API NEWS FEED ===\n")
+            self.news_box.append(news_text)
 
     def start_analysis(self):
         ticker = self.ticker_input.text().upper().strip()
@@ -284,42 +235,29 @@ class ResearchApp(QMainWindow):
             return
 
         self.analyze_btn.setEnabled(False)
-        self.analyze_btn.setText("Synthesizing...")
-        self.ai_card.insight_box.clear()
-        self.ai_card.signal_label.setText("ANALYZING...")
-        self.ai_card.signal_label.setStyleSheet("color: #D4D4D8;")
-        
-        # Hide the UI to prevent photobombing the chart screenshot
-        self.showMinimized() 
+        self.insight_box.clear()
+        self.signal_label.setText("ANALYZING...")
+        self.signal_label.setStyleSheet("color: #D4D4D8;")
         
         threading.Thread(target=self._worker, args=(ticker,), daemon=True).start()
 
     def _worker(self, ticker):
         try:
-            self.signals.log.emit("Switching context to chart region. Wait 3s...")
-            self.signals.progress.emit(10)
-            time.sleep(3)
-
-            self.signals.log.emit("Executing LLaVA Vision Agent...")
-            vision_res = cast(Dict[str, Any], screen_analyzer.run_vision_agent())
-            self.signals.progress.emit(40)
+            self.signals.log.emit(f"Opening global API datalink for {ticker}...")
+            self.signals.progress.emit(20)
             
-            if vision_res.get('status') == 'error':
-                self.signals.error.emit(vision_res['message'])
+            # Fetch data using the currently selected timeframe
+            intel = data_engine.fetch_market_intelligence(ticker, self.active_period, self.active_interval)
+            if intel['status'] == 'error':
+                self.signals.error.emit(intel['message'])
                 return
             
-            self.signals.log.emit("Fetching API Market Parameters...")
-            market_res = cast(Dict[str, Any], prompt.fetch_market_data(ticker))
-            self.signals.progress.emit(70)
+            self.signals.progress.emit(50)
             
-            if market_res.get('status') == 'error':
-                self.signals.error.emit(market_res['message'])
-                return
-            
-            market_data = cast(Dict[str, Any], market_res['data'])
+            self.signals.api_data_ready.emit(intel['chart_data'], intel['news'])
+            self.signals.log.emit("Data acquired. Compiling quantitative report...")
 
-            self.signals.log.emit("Compiling Final Hybrid Signal...")
-            signal = hybrid.generate_trade_signal(ticker, market_data, cast(str, vision_res['data']))
+            signal = hybrid.generate_trade_signal(ticker, intel)
             self.signals.progress.emit(100)
             
             self.signals.finished.emit(ticker, signal)
@@ -328,36 +266,37 @@ class ResearchApp(QMainWindow):
             self.signals.error.emit(str(e))
 
     def analysis_complete(self, ticker, signal):
-        # Bring window back up
-        self.showNormal()
-        self.activateWindow()
+        self.update_status("API Datalink Terminated. Analysis Complete.")
+        
+        if "=== EXECUTION DIRECTIVE ===" in signal:
+            parts = signal.split("=== EXECUTION DIRECTIVE ===")
+            self.news_box.append("\n" + parts[0].strip())
+            self.insight_box.setText("=== EXECUTION DIRECTIVE ===\n" + parts[1].strip())
+        else:
+            self.insight_box.setText(signal)
+            
+        text_upper = signal.upper()
+        if "ACTION: LONG" in text_upper:
+            self.signal_label.setText("EXECUTE: LONG")
+            self.signal_label.setStyleSheet("color: #2DD4BF;") 
+        elif "ACTION: SHORT" in text_upper:
+            self.signal_label.setText("EXECUTE: SHORT")
+            self.signal_label.setStyleSheet("color: #F43F5E;") 
+        else:
+            self.signal_label.setText("HOLD POSITION")
+            self.signal_label.setStyleSheet("color: #A1A1AA;")
 
-        self.update_status("Analysis Complete.")
-        self.ai_card.update_insight(signal)
-        
-        # Drop the AI analysis dot on the chart
-        self.add_ai_target_dot(signal)
-        
-        self.reset_ui()
+        self.analyze_btn.setEnabled(True)
 
     def analysis_error(self, error_msg):
-        self.showNormal()
         self.update_status(f"CRITICAL ERROR: {error_msg}")
-        self.ai_card.signal_label.setText("SYSTEM FAULT")
-        self.ai_card.signal_label.setStyleSheet("color: #F43F5E;")
-        self.reset_ui()
-
-    def reset_ui(self):
+        self.signal_label.setText("DATALINK FAULT")
+        self.signal_label.setStyleSheet("color: #F43F5E;")
         self.analyze_btn.setEnabled(True)
-        self.analyze_btn.setText("2. Initialize AI Analysis")
-        QApplication.processEvents()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    
-    # Use Fusion style as a solid base for dark mode
     app.setStyle("Fusion")
-    
     window = ResearchApp()
     window.show()
     sys.exit(app.exec())
