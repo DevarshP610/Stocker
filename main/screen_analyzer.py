@@ -24,14 +24,14 @@ def run_vision_agent() -> dict:
             config = json.load(f)
             chart_region = tuple(config["region"])
             
-        # Capture screenshot
+
         raw_img = pyautogui.screenshot(region=chart_region)
         raw_img = raw_img.convert('RGB')
         
-        # Resize for LLaVA optimization
+
         raw_img.thumbnail((336, 336), Image.Resampling.LANCZOS) 
         
-        # Save image using the absolute path
+
         raw_img.save(image_path, "JPEG", quality=75)
 
         with open(image_path, "rb") as img_file:
@@ -40,7 +40,7 @@ def run_vision_agent() -> dict:
     except Exception as e:
         return {"status": "error", "message": f"Screenshot failed: {e}"}
 
-    # Prompt tuned for specific chart focus
+
     vision_prompt = """Focus ONLY on the far right side of this chart (most recent 10-15 candles). Do NOT guess the price.
 Answer with exactly these three lines:
 TREND: [Bullish, Bearish, or Ranging]

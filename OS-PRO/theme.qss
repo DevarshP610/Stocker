@@ -1,0 +1,82 @@
+/* GLOBAL RESEARCH THEME */
+QWidget {
+    background-color: #121214; /* Deep Charcoal */
+    color: #E4E4E7; /* Soft White */
+    font-family: 'Inter', 'Segoe UI', sans-serif;
+}
+
+/* CARDS & PANELS */
+QFrame#Card {
+    background-color: #18181B; /* Slightly lighter charcoal */
+    border-radius: 12px;
+    border: 1px solid #27272A;
+}
+
+/* INPUT FIELD */
+QLineEdit {
+    background-color: #09090B;
+    border: 1px solid #3F3F46;
+    border-radius: 6px;
+    padding: 10px 15px;
+    color: #2DD4BF; /* Teal text */
+    font-size: 14px;
+}
+QLineEdit:focus {
+    border: 1px solid #8B5CF6; /* Violet focus */
+}
+
+/* CALIBRATION BUTTON (Set Bounds) */
+QPushButton#ToolBtn {
+    background-color: #27272A;
+    border: 1px solid #3F3F46;
+    color: #D4D4D8;
+    border-radius: 6px;
+    padding: 10px 15px;
+    font-weight: bold;
+}
+QPushButton#ToolBtn:hover {
+    background-color: #3F3F46;
+    color: #FFFFFF;
+}
+
+/* PRIMARY ACTION BUTTON (Run Analysis) */
+QPushButton#PrimaryBtn {
+    background-color: #7C3AED; /* Deep Violet */
+    color: #FFFFFF;
+    border-radius: 6px;
+    padding: 10px 15px;
+    font-weight: bold;
+    font-size: 14px;
+}
+QPushButton#PrimaryBtn:hover {
+    background-color: #8B5CF6; /* Lighter Violet */
+}
+QPushButton#PrimaryBtn:disabled {
+    background-color: #3F3F46;
+    color: #A1A1AA;
+}
+
+/* TEXT OUTPUT (AI Insights) */
+QTextEdit {
+    background-color: #09090B;
+    border: 1px solid #27272A;
+    border-radius: 8px;
+    padding: 12px;
+    color: #D4D4D8;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+/* PROGRESS BAR */
+QProgressBar {
+    background-color: #27272A;
+    border-radius: 4px;
+    border: none;
+    text-align: center;
+    color: transparent;
+    height: 8px;
+}
+QProgressBar::chunk {
+    background-color: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #8B5CF6, stop:1 #2DD4BF);
+    border-radius: 4px;
+}
